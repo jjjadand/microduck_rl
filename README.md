@@ -252,6 +252,9 @@ uv run --no-sync train Mjlab-Bow-Flat-MicroDuck \
 `models/checkpoints/rsl_rl/velocity/`。官方项目没有提供可续训 PT，因此这里的
 PT 是本次 Jetson 行走训练结果，不是官方发布模型。
 
+Jetson 实机训练截图和 MuJoCo 推理录屏位于 `docs/media/`，包括并行训练、
+GPU 监控、前进/后退推理以及键盘触发踢球演示。
+
 ## 5. 最短复现路径
 
 ```bash
