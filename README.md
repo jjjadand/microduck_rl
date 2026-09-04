@@ -1,261 +1,282 @@
-# Microduck RL
+# Microduck on Jetson：强化学习训练与 MuJoCo 推理 Demo
 
-<img width="2215" height="884" alt="image" src="https://github.com/user-attachments/assets/5db7cc83-b3ce-4f7c-83f0-0572a63baed7" />
+本 Demo 在 **Seeed Jetson Orin NX 16GB** 上部署 Microduck 强化学习训练环境，支持使用官方任务训练动作、加载官方 ONNX 策略进行 MuJoCo 可视化和键盘控制，并提供新增自定义动作任务的完整开发流程。
 
+当前环境已基于 **JetPack 7.2 / Ubuntu 24.04 / CUDA 13.2 / Python 3.12** 验证。
 
-RL training environments for [Microduck](https://github.com/pollen-robotics/microduck) —
-a ~800 g, ~25 cm tall bipedal robot — built on
-[mjlab](https://github.com/mujocolab/mjlab) (MuJoCo Warp) with PPO.
-Policies are trained here at 50 Hz, exported to ONNX, and deployed on the real
-robot by the runtime in [pollen-robotics/microduck](https://github.com/pollen-robotics/microduck).
+## Demo 能做什么
 
-<!-- HERO VIDEO — real robot montage: walking, standup, roulade, roller skating.
-     Keep it short (~30 s) and real-robot-first: this is the "why should I care" shot. -->
+- 在 Jetson GPU 上并行训练 Microduck 行走、起身、坐站、拾取、翻滚、踢球和轮滑动作。
+- 使用 MuJoCo Native Viewer 或浏览器 Viewer 查看仿真效果。
+- 加载官方 ONNX 策略，通过键盘实时控制速度并切换动作。
+- 从自己训练的 `.pt` checkpoint 导出带观测归一化的 ONNX。
+- 以现有任务为模板，开发鞠躬、点头、下蹲等自定义动作。
 
-https://github.com/user-attachments/assets/50c3d537-8db2-4005-9d9c-3472faeec4d0
+## 1. 部署环境与准备工作
 
-The repo encodes the full sim2real recipe: [BAM](https://github.com/Rhoban/bam)
-actuator physics, domain randomization, backlash simulation, and the
-reward-design lessons that made it work
-(see [AGENTS.md](AGENTS.md) for the distilled playbook).
+### 1.1 已验证环境
 
-## Quickstart
+| 项目 | 配置 |
+|------|------|
+| Jetson | Seeed reComputer，NVIDIA Jetson Orin NX 16GB |
+| 操作系统 | Ubuntu 24.04 LTS，aarch64 |
+| JetPack / L4T | JetPack 7.2 / L4T R39.2 |
+| CUDA | 系统 CUDA 13.2 |
+| Python | 3.12 |
+| PyTorch | 2.9.1+cu130 |
+| MuJoCo | 3.10.0 |
+| Warp | 1.12.0 |
 
-Requires a CUDA GPU (training runs through MuJoCo Warp) and [uv](https://docs.astral.sh/uv/).
+建议使用 NVMe 并预留至少 25GB 空间，同时准备主动散热、稳定电源和可访问 Python/CUDA 软件源的网络。
 
-> **On ARM boxes (DGX Spark / GB10, Jetson):** `uv sync` pulls ~2 GB of CUDA
-> wheels on first run and uv's default 30 s HTTP timeout can abort mid-download.
-> Export `UV_HTTP_TIMEOUT=600` for the first sync. 
+### 1.2 工作目录
+
+```text
+/home/seeed/microduck-jetson/
+├── deploy_microduck_jetson.sh          # JetPack 7.2 一键部署脚本
+├── microduck_rl/                        # 训练、导出和仿真项目
+│   ├── src/mjlab_microduck/tasks/       # 任务环境、奖励和任务注册
+│   ├── scripts/                         # ONNX 导出与推理脚本
+│   ├── pretrained/pollen-robotics/      # 官方 ONNX 动作模型
+│   └── logs/rsl_rl/                     # 本地训练日志与 PT checkpoint
+├── microduck_jetson_startup.md          # 环境、训练、推理完整手册
+├── microduck_jetson_training_guide.md   # 训练与可视化专题
+└── microduck_custom_action_training.md  # 自定义动作进阶篇
+```
+
+### 1.3 首次部署或重建环境
 
 ```bash
-git clone https://github.com/pollen-robotics/microduck_rl
-cd microduck_rl
+ssh seeed@192.168.88.77
 
-# train the walking policy (uses your GPU; ~1-2 h for a usable gait at 4096 envs)
-uv run train Mjlab-Velocity-Flat-MicroDuck --env.scene.num-envs 4096
-
-# watch a trained policy in the viewer
-uv run play Mjlab-Velocity-Flat-MicroDuck --wandb-run-path <entity/project/run_id>
-
-# export to ONNX for deployment
-uv run scripts/export.py Mjlab-Velocity-Flat-MicroDuck --wandb-run-path <...>
-uv run publish --onnx output.onnx --repo <user>/microduck-<name> --kind episodic --duration-s 4.0   # share it (see "Publishing a policy")
-
-# drive the exported policy in CPU MuJoCo with the keyboard
-uv run scripts/infer_policy.py --walking output.onnx
+SUDO_PASSWORD=<JETSON_PASSWORD> \
+TARGET_DIR=$HOME/microduck-jetson/microduck_rl \
+bash $HOME/microduck-jetson/deploy_microduck_jetson.sh
 ```
 
-Resume from a checkpoint:
+进入项目。后续训练命令必须在项目目录内执行：
 
 ```bash
-uv run train Mjlab-Velocity-Flat-MicroDuck --env.scene.num-envs 4096 \
-    --agent.run-name resume --agent.load-checkpoint model_29999.pt --agent.resume True
+cd ~/microduck-jetson/microduck_rl
+export MUJOCO_GL=egl
 ```
 
-No GPU? Add `--hf-jobs` to any train command to run it on Hugging Face Jobs
-instead of locally (see [scripts/hf/README.md](scripts/hf/README.md)).
-
-## Tasks
-
-`uv run list-envs` prints the live registry. Flat/Rough variants exist where noted.
-
-<!-- SHOWCASE GRID — one short GIF per task family (sim or real), 3 per row.
-     Priority order if you only record a few: Velocity, VelStand (fall+recover),
-     Roulade, SitStand, Rollers/Swizzle, BallKick. -->
-
-| Task id | Terrain | Description |
-|---|---|---|
-| `Mjlab-Velocity-{Flat,Rough}-MicroDuck` | flat/rough | **The main task**: walking with velocity commands + head-pose commands |
-| `Mjlab-VelStand-{Flat,Rough}-MicroDuck` | flat/rough | Walking + fall recovery in one policy |
-| `Mjlab-StandUp-{Flat,Rough}-MicroDuck` | flat/rough | Stand up from face-down/face-up/sitting, then hold the stand + body-pose control |
-| `Mjlab-SitStand-{Flat,Rough}-MicroDuck` | flat/rough | Commanded sit ↔ stand in one policy, gently, head commandable |
-| `Mjlab-GroundPick-{Flat,Rough}-MicroDuck` | flat/rough | Crouch and touch the ground with the mouth tip, return to stand |
-| `Mjlab-BallKick-Flat-MicroDuck` | flat | Kick a 70 mm / 15 g ball forward (actor is ball-blind) |
-| `Mjlab-Roulade-Flat-MicroDuck` | flat | Forward roll over the head, land back on the feet |
-| `Mjlab-Velocity-Flat-MicroDuck-Rollers` | flat | Roller-skate velocity tracking (passive wheels under the feet) |
-| `Mjlab-Velocity-Swizzle-MicroDuck` | flat | Classic symmetric swizzle skating |
-| `Mjlab-RollerCrouch-Flat-MicroDuck` | flat | Crouch while gliding on rollers |
-| `Mjlab-RollerSlope-Flat-MicroDuck` | slope | Glide down slopes on rollers |
-| `Mjlab-RollerStandUp-Flat-MicroDuck` | flat | Stand up from the ground onto the wheels |
-| `Mjlab-Spin-Flat-MicroDuck` | flat | Fast spin in place on rollers |
-
-At deployment the runtime hot-swaps these policies (walk / recover / trick)
-behind a shared 61-dimensional observation contract, so any of them can take
-over the robot at any moment. `scripts/infer_policy.py` rehearses exactly that:
+验证 CUDA：
 
 ```bash
-uv run scripts/infer_policy.py --walking walk.onnx --standing stand.onnx \
-    --sitstand sitstand.onnx --roulade roulade.onnx --new-cmd-obs
+uv run --no-sync python3 - <<'PY'
+import torch
+
+print("PyTorch:", torch.__version__)
+print("CUDA runtime:", torch.version.cuda)
+print("CUDA available:", torch.cuda.is_available())
+print("GPU:", torch.cuda.get_device_name(0))
+
+value = torch.randn(512, 512, device="cuda")
+print("CUDA matmul:", (value @ value).device)
+PY
 ```
 
-Keyboard-driven (velocity commands, `G` ground pick, `Y` sit/stand, `R` roulade,
-`K`/`L` kicks); `--debug`, `--save-csv`, `--record` support sim2real comparisons.
-The servos are simulated with the same BAM M6 XL330 model the policies are
-trained against (voltage control + load-dependent friction, via
-`bam.mujoco.MujocoController`); `--vin` / `--vin-drop-gain` / `--kp-fw` pin the
-training DR ranges to one value, `--no-bam` falls back to the XML PD actuators.
+> 使用 `uv run --no-sync` 可以避免锁文件重新同步后覆盖 Jetson 使用的 CUDA 版 PyTorch。
 
-### Backlash variants
+## 2. 快速开始：官方动作训练与推理
 
-Every main task has a **Backlash** twin that trains on a model with ±1° of gear
-play (2° total) in series with each of the 14 servo joints: insert `-Backlash`
-before `MicroDuck` in the task id, e.g. `Mjlab-Velocity-Flat-Backlash-MicroDuck`.
-
-The backlash is modeled properly for sim2real: each servo gets an unactuated
-`passive_<joint>_backlash` hinge, and because the real encoder sits on the
-output side of the play, both the firmware PD emulation
-(`BacklashEncoderBamActuator`) and the `joint_pos`/`joint_vel` observations
-read *through* the backlash (`qpos[servo] + qpos[backlash]`). Observation and
-action dims are unchanged, so ONNX export and the runtime need no changes.
-See `src/mjlab_microduck/tasks/backlash.py`.
-
-## Actuator model
-
-All tasks use the [BAM](https://github.com/Rhoban/bam) M6 actuator model for
-the Dynamixel XL330 (voltage control law, back-EMF, Coulomb/Stribeck/load-dependent
-friction), with per-env domain randomization on battery voltage, voltage sag
-under load, command delay, and friction magnitude
-(`FrictionDRBamActuator` in `src/mjlab_microduck/actuator/`).
-
-At this scale — tiny servos driving a ~800 g biped — actuator fidelity is most
-of the sim2real gap, which is why the actuator is modeled down to its voltage
-control law instead of an ideal PD.
-
-## Robot models
-
-MJCF models live in `src/mjlab_microduck/robot/microduck/` and are exported
-from Onshape with [onshape-to-robot](https://github.com/Rhoban/onshape-to-robot),
-one `config_mjcf_*.json` per model:
-
-| XML | Used by |
-|---|---|
-| `robot_walk.xml` | Velocity (stripped trunk/head contacts — falling is cheap) |
-| `robot_groundcontact.xml` | VelStand, StandUp, SitStand, GroundPick, BallKick, Roulade (curated collision set for the parts that touch the floor — body can physically lie on the ground; formerly `robot_allcollisions.xml`) |
-| `robot_groundcontact_rollers.xml` | Roller tasks (passive wheels) |
-| `robot_allcollisions.xml` | True full-collision model — every part has a collision geom. No task uses it yet |
-| `robot_*_backlash.xml` | Backlash task variants (generated by `add_backlash.py`) |
-
-`scene*.xml` files wrap the robots with a floor + keyframes (STAND/SIT/FOLD)
-for quick viewing and for `infer_policy.py`.
-
-<!-- IMAGE — side-by-side render: walk model vs rollers model (or a collision-geom
-     visualization). One image here makes the model-variant story instant. -->
-
-## Project structure
-
-```
-src/mjlab_microduck/
-├── robot/
-│   ├── microduck/                    # MJCF exports, export configs, scenes, add_backlash.py
-│   └── microduck_constants.py        # robot cfgs, HOME frame, BAM actuator cfg
-├── actuator/friction_dr_bam.py       # BAM + friction DR + backlash encoder feedback
-├── tasks/
-│   ├── __init__.py                   # task registration (base + backlash variants)
-│   ├── mdp.py                        # rewards, events, observations, custom classes
-│   ├── backlash.py                   # make_backlash_variant() env-cfg wrapper
-│   └── microduck_*_env_cfg.py        # one cfg module per task family
-├── train_cli.py                      # `train` script (identical to mjlab's)
-├── train_hook.py                     # intercepts `train ... --hf-jobs`
-└── hf_jobs.py                        # Hugging Face Jobs submission
-```
-
-Conventions worth knowing:
-
-- The observation layout is shared across every policy (61-dim actor obs:
-  48 proprioception + commands `[twist(3), head_pose(4), body_pose(6)]`), which
-  is what makes runtime policy hot-swapping possible. Envs that don't use a
-  command slot zero-pad it rather than dropping it.
-- Unactuated joints are all named `passive_*` (roller wheels, backlash
-  hinges); actuators, joint observations and pose rewards select servo joints
-  with `^(?!passive_).*`.
-- Domain-randomization toggles are `ENABLE_*` booleans at the top of each
-  env cfg file.
-- Joint layout (14 servos): 0–4 left leg (hip_yaw, hip_roll, hip_pitch, knee,
-  ankle), 5–8 neck/head (neck_pitch, head_pitch, head_yaw, head_roll),
-  9–13 right leg.
-- The exporter bakes the observation normalizer into the ONNX graph — always
-  deploy ONNX produced by `scripts/export.py`, never a hand-converted
-  checkpoint, or the policy sees unnormalized observations at runtime.
-
-[AGENTS.md](AGENTS.md) documents the env-building workflow and the reward-design
-rules learned across the project (also aimed at AI coding agents working in
-this repo).
-
-## Publishing a policy
-
-`uv run publish` puts a policy on the Hugging Face Hub in the shape the robot's
-daemon loads: one `policy.onnx` with the observation normalizer baked in, a
-`manifest.json` following schema 2 of the
-[microduck policy manifest](https://github.com/pollen-robotics/microduck/blob/main/docs/policy-manifest.md),
-and a README saying how to run it. Anyone with a microduck can then install it
-with one command, no daemon release needed.
+### 2.1 查看官方任务
 
 ```bash
-# From a wandb run — exports through the one safe path, then uploads
-uv run publish --task Mjlab-PoliteBow-Flat-MicroDuck \
-    --wandb-run-path <entity/project/run_id> --checkpoint 3000 \
-    --repo <user>/microduck-polite-bow --kind episodic --duration-s 4.0 \
-    --description "Bows from a two-foot stand and comes back up."
-
-# From an ONNX you already exported (validated, not re-exported)
-uv run publish --onnx output.onnx --repo <user>/microduck-flamingo \
-    --kind perpetual --unwind-s 1.5 --twist-help "[flag, side, 0]"
-
-# A new gait for a slot
-uv run publish --onnx output.onnx --repo <user>/microduck-my-walk --kind perpetual --slot walk
-
-# See what would be uploaded without touching the Hub
-uv run publish --onnx output.onnx --repo <user>/microduck-bow --kind episodic --duration-s 4.0 --dry-run
+cd ~/microduck-jetson/microduck_rl
+uv run --no-sync list-envs | grep MicroDuck
 ```
 
-Then on a robot:
+常用任务包括：
+
+| 动作 | Task ID |
+|------|---------|
+| 行走 | `Mjlab-Velocity-Flat-MicroDuck` |
+| 行走与跌倒恢复 | `Mjlab-VelStand-Flat-MicroDuck` |
+| 从地面起身 | `Mjlab-StandUp-Flat-MicroDuck` |
+| 坐下/站起 | `Mjlab-SitStand-Flat-MicroDuck` |
+| 低头触地拾取 | `Mjlab-GroundPick-Flat-MicroDuck` |
+| 前滚翻 | `Mjlab-Roulade-Flat-MicroDuck` |
+| 踢球 | `Mjlab-BallKick-Flat-MicroDuck` |
+
+### 2.2 运行训练冒烟测试
+
+先用 64 个并行环境和 5 次迭代确认训练链路：
 
 ```bash
-sudo robotctl policy add polite-bow <user>/microduck-polite-bow   # episodic: length comes from the manifest
-sudo robotctl policy add flamingo <user>/microduck-flamingo --hold 5   # held pose: you pick how long
-sudo robotctl policy load walk <user>/microduck-my-walk                # gait: into the walk slot
-robotctl robot do polite-bow
+cd ~/microduck-jetson/microduck_rl
+export MUJOCO_GL=egl
+
+uv run --no-sync train Mjlab-Velocity-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
 ```
 
-What `--kind` means, and what each needs:
-
-- **episodic** — runs for `--duration-s` and returns itself to a standing pose
-  (kicks, roulade, a bow). Add `--chain` if holding the button should repeat it.
-- **perpetual** — runs until told otherwise. Two shapes:
-  - a **gait** (a new walk or stand): add `--slot walk` (or `stand`) and
-    nothing else; the owner installs it with `robotctl policy load walk <repo>`.
-  - a **held pose** (the flamingo): give `--unwind-s`, how long the daemon
-    drives the idle twist (`--idle`, zeros by default) before handing back to
-    the gait, so the robot is not let go of on one foot. The owner runs it as a
-    one-shot with `policy add ... --hold <seconds>`.
-
-Before anything is uploaded, `publish` checks the graph is `[1,61] -> [1,14]`
-(a 51-D legacy policy is refused with a message), runs it on plausible inputs
-and refuses NaNs or a constant output, fills the `training` block from git and
-wandb (task, commit, branch, dirty flag, run, checkpoint), and refuses to
-overwrite an existing `.onnx` in the repo without `--force`. Repos are created
-private; `--no-private` for public, `--tag v1` to tag the revision.
-
-Only constant-command policies are publishable this way. Phase-driven moves
-(the ground pick) and the posture-flag sit↔stand are driven by the daemon
-itself and live in the official set, `pollen-robotics/microduck-policies`.
-
-## Tests
+训练输出保存在 `logs/rsl_rl/`。正式训练可将环境数提高到 `2048` 或 `4096`；如果内存不足则逐级降低。
 
 ```bash
-uv run --with pytest pytest tests/
+uv run --no-sync train Mjlab-Velocity-Flat-MicroDuck \
+  --env.scene.num-envs 2048 \
+  --agent.logger tensorboard
 ```
 
-CPU-only config-invariant and reward-function regression tests — they lock in
-joint-index mappings, reward sign conventions, and NaN guards.
+### 2.3 查看自己训练的 PT
 
-## Related projects
+通过 SSH 使用浏览器 Viewer：
 
-- [microduck](https://github.com/pollen-robotics/microduck) — the Microduck project home, including the onboard runtime that runs the exported policies
-- [mjlab](https://github.com/mujocolab/mjlab) — the training framework (MuJoCo Warp + rsl_rl)
-- [BAM](https://github.com/Rhoban/bam) — better actuator models, by Rhoban
+```bash
+export MUJOCO_GL=egl
 
-## License
+uv run --no-sync play Mjlab-Velocity-Flat-MicroDuck \
+  --checkpoint-file /完整路径/model_XXXX.pt \
+  --num-envs 1 \
+  --viewer viser
+```
 
-This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
-3D model files are licensed under Creative Commons BY-SA-NC.
+浏览器打开 `http://192.168.88.77:8080`。
+
+Jetson 连接显示器时，可在本地桌面终端使用 Native Viewer：
+
+```bash
+export DISPLAY=:0
+export MUJOCO_GL=glfw
+
+uv run --no-sync play Mjlab-Velocity-Flat-MicroDuck \
+  --checkpoint-file /完整路径/model_XXXX.pt \
+  --num-envs 1 \
+  --viewer native
+```
+
+### 2.4 使用官方 ONNX 键盘推理
+
+官方 ONNX 位于 `pretrained/pollen-robotics/`。它们可直接用于推理，但不能恢复 PPO 优化器或继续训练；需要续训时，应先运行对应任务生成自己的 `.pt`。
+
+在 Jetson 本地桌面终端启动全部双足动作：
+
+```bash
+cd ~/microduck-jetson/microduck_rl
+export DISPLAY=:0
+export MUJOCO_GL=glfw
+
+uv run --no-sync python3 scripts/infer_policy.py \
+  --walking pretrained/pollen-robotics/alpha_walking.onnx \
+  --standing pretrained/pollen-robotics/alpha_stand.onnx \
+  --sitstand pretrained/pollen-robotics/alpha_sitstand.onnx \
+  --ground-pick pretrained/pollen-robotics/alpha_ground_pick.onnx \
+  --roulade pretrained/pollen-robotics/roulade.onnx \
+  --kick-left pretrained/pollen-robotics/ball_kick_left.onnx \
+  --kick-right pretrained/pollen-robotics/ball_kick_right.onnx \
+  --new-cmd-obs
+```
+
+主要按键：
+
+- 方向键：前后移动和横移。
+- `A` / `E`：左右转向。
+- `G`：触发拾取。
+- `Y`：切换坐下/站起。
+- `R`：触发前滚翻。
+- `K` / `L`：左脚/右脚踢球。
+- `Space`：速度指令归零。
+- `Q`：退出。
+
+### 2.5 导出自己的 ONNX
+
+```bash
+uv run --no-sync python3 scripts/export.py \
+  Mjlab-Velocity-Flat-MicroDuck \
+  --checkpoint-file /完整路径/model_XXXX.pt \
+  --onnx-file walking_custom.onnx
+```
+
+必须使用项目的 `scripts/export.py`，以便把训练使用的观测归一化器一并写入 ONNX。
+
+## 3. 自定义动作训练
+
+自定义动作不是直接编辑 ONNX，而是新增或复制一个训练任务，定义动作目标、奖励、终止条件和 PPO 配置，再注册新的 Task ID 进行训练。
+
+推荐流程：
+
+1. 根据动作类型选择最接近的官方模板。
+2. 复制环境配置文件并设计动作时间线或阶段命令。
+3. 定义目标关节姿态和动作结果奖励。
+4. 在 `src/mjlab_microduck/tasks/__init__.py` 注册新任务。
+5. 先用随机策略检查 Viewer，再运行 64 环境冒烟训练。
+6. 分阶段增加训练长度、并行环境和域随机化。
+7. 使用训练得到的 PT 可视化，最后导出 ONNX。
+
+例如开发 Bow 鞠躬动作，可从相位动作模板开始：
+
+```bash
+cd ~/microduck-jetson/microduck_rl
+
+cp src/mjlab_microduck/tasks/microduck_ground_pick_env_cfg.py \
+  src/mjlab_microduck/tasks/microduck_bow_env_cfg.py
+```
+
+注册 `Mjlab-Bow-Flat-MicroDuck` 后，依次运行：
+
+```bash
+# 确认任务已注册
+uv run --no-sync list-envs | grep Mjlab-Bow
+
+# 随机策略检查场景、重置和 Viewer
+export MUJOCO_GL=glfw
+uv run --no-sync play Mjlab-Bow-Flat-MicroDuck \
+  --agent random --num-envs 1 --viewer native
+
+# 训练冒烟测试
+export MUJOCO_GL=egl
+uv run --no-sync train Mjlab-Bow-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
+```
+
+开发时必须保持项目模型契约：Actor 观测为 61 维、策略动作为 14 维、未使用的 13 维命令字段必须补零，并避免硬编码关节索引。详细的 Bow 示例、奖励函数、课程学习、Backlash 任务和测试方法见：
+
+```text
+~/microduck-jetson/microduck_custom_action_training.md
+```
+
+## 4. 详细文档
+
+- 环境部署、日常训练、TensorBoard、MuJoCo 和键盘推理：`microduck_jetson_startup.md`
+- 训练参数、可视化方式和实体机器人部署：`microduck_jetson_training_guide.md`
+- 自定义动作任务开发与 Bow 完整示例：`microduck_custom_action_training.md`
+
+仓库内模型说明见 `models/README.md`。官方 ONNX 位于
+`pretrained/pollen-robotics/`；Jetson 训练产生的 PT checkpoint 位于
+`models/checkpoints/rsl_rl/velocity/`。官方项目没有提供可续训 PT，因此这里的
+PT 是本次 Jetson 行走训练结果，不是官方发布模型。
+
+## 5. 最短复现路径
+
+```bash
+ssh seeed@192.168.88.77
+cd ~/microduck-jetson/microduck_rl
+export MUJOCO_GL=egl
+
+# 训练链路验证
+uv run --no-sync train Mjlab-Velocity-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
+
+# Jetson 本地桌面运行官方 ONNX Demo
+export DISPLAY=:0
+export MUJOCO_GL=glfw
+uv run --no-sync python3 scripts/infer_policy.py \
+  --walking pretrained/pollen-robotics/alpha_walking.onnx \
+  --standing pretrained/pollen-robotics/alpha_stand.onnx \
+  --sitstand pretrained/pollen-robotics/alpha_sitstand.onnx \
+  --ground-pick pretrained/pollen-robotics/alpha_ground_pick.onnx \
+  --roulade pretrained/pollen-robotics/roulade.onnx \
+  --kick-left pretrained/pollen-robotics/ball_kick_left.onnx \
+  --kick-right pretrained/pollen-robotics/ball_kick_right.onnx \
+  --new-cmd-obs
+```
+
+完成以上步骤，即可复现 Microduck 在 Jetson 上的训练、MuJoCo 可视化和官方多动作键盘推理 Demo。

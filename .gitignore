@@ -30,6 +30,11 @@ src/mjlab_microduck/robot/microduck_test/*
 data/
 *.pt
 
+# Published model artifacts
+!pretrained/pollen-robotics/*.onnx
+!models/checkpoints/**/*.pt
+!models/checkpoints/**/*.pth
+
 claude_experiments/
 
 backup_onnx/

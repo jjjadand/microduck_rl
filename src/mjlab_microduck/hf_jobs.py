@@ -1,6 +1,6 @@
 """Submit a mjlab-microduck training run as a Hugging Face Job.
 
-Invoked by the --hf-jobs interception (see train_hook.py):
+Invoked via the `train` wrapper (see train_cli.py):
 
     uv run train Mjlab-Kick-Flat-MicroDuck \
         --env.scene.num-envs 4096 --agent.max_iterations 4000 --hf-jobs
@@ -319,9 +319,6 @@ def submit(argv: list[str]) -> int:
     ckpt_repo = args.ckpt_repo or f"{namespace}/{run_name}"
 
     env: dict[str, str] = {
-        # Disarms the --hf-jobs interception inside the job, so the job's own
-        # `uv run train` can only ever train locally (see train_hook.py).
-        "MICRODUCK_IN_HF_JOB": "1",
         "CKPT_REPO": ckpt_repo,
         "TRAIN_ARGS": " ".join(shlex.quote(a) for a in [args.task, *train_args]),
     }
