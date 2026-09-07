@@ -291,9 +291,6 @@ GPU 监控、前进/后退推理以及键盘触发踢球演示。
 ## 5. 最短复现路径
 
 ```bash
-export JETSON_USER="<JETSON_USER>"
-export JETSON_HOST="<JETSON_IP_OR_HOSTNAME>"
-ssh "${JETSON_USER}@${JETSON_HOST}"
 cd ~/microduck-jetson/microduck_rl
 export MUJOCO_GL=egl
 
