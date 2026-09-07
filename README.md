@@ -1,6 +1,6 @@
 # Microduck on Jetson：强化学习训练与 MuJoCo 推理 Demo
 
-本 Demo 在 **Seeed Jetson Orin NX 16GB** 上部署 Microduck 强化学习训练环境，支持使用官方任务训练动作、加载官方 ONNX 策略进行 MuJoCo 可视化和键盘控制，并提供新增自定义动作任务的完整开发流程。
+本 Demo 在 **Seeed Jetson Orin Nano/NX** 上部署 Microduck 强化学习训练环境，支持使用官方任务训练动作、加载官方 ONNX 策略进行 MuJoCo 可视化和键盘控制，并提供新增自定义动作任务的完整开发流程。
 
 当前环境已基于 **JetPack 7.2 / Ubuntu 24.04 / CUDA 13.2 / Python 3.12** 验证。
 
@@ -18,7 +18,7 @@
 
 | 项目 | 配置 |
 |------|------|
-| Jetson | Seeed reComputer，NVIDIA Jetson Orin NX 16GB |
+| Jetson | Seeed reComputer，NVIDIA Jetson Orin Nano/NX（16GB 已验证） |
 | 操作系统 | Ubuntu 24.04 LTS，aarch64 |
 | JetPack / L4T | JetPack 7.2 / L4T R39.2 |
 | CUDA | 系统 CUDA 13.2 |
@@ -32,7 +32,7 @@
 ### 1.2 工作目录
 
 ```text
-/home/seeed/microduck-jetson/
+$HOME/microduck-jetson/
 ├── deploy_microduck_jetson.sh          # JetPack 7.2 一键部署脚本
 ├── microduck_rl/                        # 训练、导出和仿真项目
 │   ├── src/mjlab_microduck/tasks/       # 任务环境、奖励和任务注册
@@ -47,7 +47,11 @@
 ### 1.3 首次部署或重建环境
 
 ```bash
-ssh seeed@192.168.88.77
+# 在开发电脑上设置实际的 Jetson 登录信息
+export JETSON_USER="<JETSON_USER>"
+export JETSON_HOST="<JETSON_IP_OR_HOSTNAME>"
+
+ssh "${JETSON_USER}@${JETSON_HOST}"
 
 SUDO_PASSWORD=<JETSON_PASSWORD> \
 TARGET_DIR=$HOME/microduck-jetson/microduck_rl \
@@ -135,7 +139,7 @@ uv run --no-sync play Mjlab-Velocity-Flat-MicroDuck \
   --viewer viser
 ```
 
-浏览器打开 `http://192.168.88.77:8080`。
+浏览器打开 `http://<JETSON_IP_OR_HOSTNAME>:8080`。如果浏览器就在 Jetson 本机运行，也可以访问 `http://127.0.0.1:8080`。
 
 Jetson 连接显示器时，可在本地桌面终端使用 Native Viewer：
 
@@ -241,6 +245,33 @@ uv run --no-sync train Mjlab-Bow-Flat-MicroDuck \
 ~/microduck-jetson/microduck_custom_action_training.md
 ```
 
+仓库还包含已在 Jetson 上完成冒烟测试的单脚平衡示例：
+
+```text
+Task ID: Mjlab-OneLegBalance-Flat-MicroDuck
+环境配置: src/mjlab_microduck/tasks/microduck_one_leg_balance_env_cfg.py
+任务注册: src/mjlab_microduck/tasks/__init__.py
+姿势编辑器: scripts/one_leg_pose_editor.py
+```
+
+`Mjlab-OneLegBalance-Flat-MicroDuck` 是传给 MJLab 注册表的任务 ID。`train` 命令通过该字符串查找 `register_mjlab_task()`，再加载环境配置、RL 配置和 runner；它不是文件名，也不是传给环境工厂函数的参数。
+
+```bash
+# 检查注册结果
+uv run --no-sync list-envs | grep OneLegBalance
+
+# 在 Jetson 桌面打开姿势编辑器
+export MUJOCO_GL=glfw
+uv run --no-sync python scripts/one_leg_pose_editor.py
+
+# 训练链路冒烟测试
+export MUJOCO_GL=egl
+uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
+```
+
 ## 4. 详细文档
 
 - 环境部署、日常训练、TensorBoard、MuJoCo 和键盘推理：`microduck_jetson_startup.md`
@@ -252,13 +283,17 @@ uv run --no-sync train Mjlab-Bow-Flat-MicroDuck \
 `models/checkpoints/rsl_rl/velocity/`。官方项目没有提供可续训 PT，因此这里的
 PT 是本次 Jetson 行走训练结果，不是官方发布模型。
 
+单脚平衡示例目前提供任务代码和姿势编辑器，但不包含可用的完整训练 checkpoint。5 次迭代仅用于验证配置和训练链路，不能视为已训练模型。
+
 Jetson 实机训练截图和 MuJoCo 推理录屏位于 `docs/media/`，包括并行训练、
 GPU 监控、前进/后退推理以及键盘触发踢球演示。
 
 ## 5. 最短复现路径
 
 ```bash
-ssh seeed@192.168.88.77
+export JETSON_USER="<JETSON_USER>"
+export JETSON_HOST="<JETSON_IP_OR_HOSTNAME>"
+ssh "${JETSON_USER}@${JETSON_HOST}"
 cd ~/microduck-jetson/microduck_rl
 export MUJOCO_GL=egl
 

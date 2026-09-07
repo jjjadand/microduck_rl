@@ -1,8 +1,8 @@
 # Microduck 自定义动作训练进阶篇
 
-> 适用环境：Jetson Orin NX 16GB、JetPack 7.2、L4T R39.2、CUDA 13.2  
-> 项目目录：`/home/seeed/microduck-jetson/microduck_rl`  
-> 更新日期：2026-09-04
+> 适用环境：Jetson Orin NX 16GB、JetPack 7.2、L4T R39.2、CUDA 13.2<br />
+> 项目目录：`$HOME/microduck-jetson/microduck_rl`<br />
+> 更新日期：2026-09-07
 
 本文说明如何在 `microduck_rl` 中新增自己的强化学习动作，包括任务模板选择、目标姿态、命令编码、奖励函数、课程学习、任务注册、测试、训练、ONNX 导出和键盘推理接入。
 
@@ -714,7 +714,7 @@ uv run --no-sync tensorboard \
 浏览器访问：
 
 ```text
-http://192.168.88.77:6006
+http://<JETSON_HOST>:6006
 ```
 
 重点观察：
@@ -831,7 +831,50 @@ Mjlab-Bow-Flat-Backlash-MicroDuck
 
 Bow 使用普通双足全碰撞模型，因此选择 `_BL_ALLCOL`。轮滑动作应使用 `_BL_ROLLERS`，行走模型按现有 velocity 任务选择 `_BL_WALK`。
 
-## 19. 自定义动作检查清单
+## 19. 已验证示例：单脚平衡
+
+仓库提供了左脚支撑、右脚抬起的单脚平衡任务。任务 ID 定义在任务注册表中：
+
+```python
+# src/mjlab_microduck/tasks/__init__.py
+register_mjlab_task(
+    task_id="Mjlab-OneLegBalance-Flat-MicroDuck",
+    env_cfg=make_microduck_one_leg_balance_env_cfg(),
+    play_env_cfg=make_microduck_one_leg_balance_env_cfg(play=True),
+    rl_cfg=MicroduckOneLegBalanceRlCfg,
+    runner_cls=MicroduckOnPolicyRunner,
+)
+```
+
+这个字符串是 `train`、`play` 和 `list-envs` 查询注册表时使用的键。动作姿态、阶段时间、奖励和 PPO 参数定义在：
+
+```text
+src/mjlab_microduck/tasks/microduck_one_leg_balance_env_cfg.py
+```
+
+可视化编辑目标姿态：
+
+```bash
+cd ~/microduck-jetson/microduck_rl
+export MUJOCO_GL=glfw
+uv run --no-sync python scripts/one_leg_pose_editor.py
+```
+
+确认注册并运行训练冒烟测试：
+
+```bash
+uv run --no-sync list-envs | grep OneLegBalance
+
+export MUJOCO_GL=egl
+uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
+```
+
+5 次迭代只验证训练链路，不会生成可直接推理的成熟策略。完整训练后应使用生成的 `.pt` checkpoint 执行 `play`，再通过 `scripts/export.py` 导出包含观测归一化器的 ONNX。
+
+## 20. 自定义动作检查清单
 
 ### 配置
 
@@ -861,7 +904,7 @@ Bow 使用普通双足全碰撞模型，因此选择 `_BL_ALLCOL`。轮滑动作
 - [ ] ONNX 是 61 输入、14 输出。
 - [ ] `infer_policy.py` 的 phase、周期和命令槽与训练一致。
 
-## 20. 常用命令汇总
+## 21. 常用命令汇总
 
 ```bash
 # 查看任务注册

@@ -67,6 +67,10 @@ from .microduck_roulade_env_cfg import (
     make_microduck_roulade_env_cfg,
     MicroduckRouladeRlCfg,
 )
+from .microduck_one_leg_balance_env_cfg import (
+    make_microduck_one_leg_balance_env_cfg,
+    MicroduckOneLegBalanceRlCfg,
+)
 from .backlash import make_backlash_variant
 
 # Standard velocity task
@@ -222,6 +226,15 @@ register_mjlab_task(
     env_cfg=make_microduck_roulade_env_cfg(),
     play_env_cfg=make_microduck_roulade_env_cfg(play=True),
     rl_cfg=MicroduckRouladeRlCfg,
+    runner_cls=MicroduckOnPolicyRunner,
+)
+
+# One-leg balance — left-foot support, right foot lifted, then return to stand.
+register_mjlab_task(
+    task_id="Mjlab-OneLegBalance-Flat-MicroDuck",
+    env_cfg=make_microduck_one_leg_balance_env_cfg(),
+    play_env_cfg=make_microduck_one_leg_balance_env_cfg(play=True),
+    rl_cfg=MicroduckOneLegBalanceRlCfg,
     runner_cls=MicroduckOnPolicyRunner,
 )
 

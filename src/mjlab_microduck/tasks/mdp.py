@@ -2772,6 +2772,47 @@ def com_over_support_foot(
     return gate * reward
 
 
+def phase_single_foot_airborne_reward(
+    env: ManagerBasedRlEnv,
+    sensor_name: str,
+    command_name: str = "twist",
+    lift_end: float = 0.30,
+    return_end: float = 0.78,
+) -> torch.Tensor:
+    """Reward the swing foot for being airborne during the one-leg phase."""
+    if sensor_name not in env.scene.sensors:
+        return torch.zeros(env.num_envs, device=env.device)
+    found = env.scene.sensors[sensor_name].data.found
+    if found.dim() > 1:
+        found = found.sum(dim=-1)
+    airborne = 1.0 - torch.clamp(found, 0.0, 1.0)
+    cmd = env.command_manager.get_command(command_name)
+    phase = (torch.atan2(cmd[:, 1], cmd[:, 0]) / (2 * torch.pi)) % 1.0
+    return kick_engagement(phase, lift_end, return_end) * airborne
+
+
+def phase_site_height_track(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+    command_name: str = "twist",
+    stand_height: float = 0.02,
+    lifted_height: float = 0.09,
+    std: float = 0.025,
+    lift_end: float = 0.30,
+    hold_end: float = 0.58,
+    return_end: float = 0.78,
+) -> torch.Tensor:
+    """Track a site-height target blended between standing and lifted poses."""
+    asset: Entity = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    phase = (torch.atan2(cmd[:, 1], cmd[:, 0]) / (2 * torch.pi)) % 1.0
+    blend = phase_pose_blend(phase, lift_end, hold_end, return_end)
+    target = stand_height + blend * (lifted_height - stand_height)
+    site_id = asset_cfg.site_ids[0]
+    height = asset.data.site_pos_w[:, site_id, 2] - env.scene.terrain.env_origins[:, 2]
+    return torch.exp(-((height - target) / std) ** 2)
+
+
 def _phase_pose_error(
     env: ManagerBasedRlEnv,
     asset_cfg: SceneEntityCfg,

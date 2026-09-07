@@ -1,9 +1,9 @@
 # Microduck Jetson 启动与使用手册
 
-> 更新日期：2026-09-04  
-> Jetson 地址：`192.168.88.77`  
-> 用户名：`seeed`  
-> 项目目录：`/home/seeed/microduck-jetson/microduck_rl`
+> 更新日期：2026-09-07<br />
+> Jetson 地址：`<JETSON_IP_OR_HOSTNAME>`<br />
+> 用户名：`<JETSON_USER>`<br />
+> 项目目录：`$HOME/microduck-jetson/microduck_rl`
 
 ## 0. JetPack 7.2 训练环境配置
 
@@ -61,13 +61,13 @@ sudo nvpmodel -q
 当前 Jetson 已保存部署脚本：
 
 ```text
-/home/seeed/microduck-jetson/deploy_microduck_jetson.sh
+$HOME/microduck-jetson/deploy_microduck_jetson.sh
 ```
 
 重新构建环境时执行：
 
 ```bash
-ssh seeed@192.168.88.77
+ssh <JETSON_USER>@<JETSON_HOST>
 
 SUDO_PASSWORD=<JETSON_PASSWORD> \
 TARGET_DIR=$HOME/microduck-jetson/microduck_rl \
@@ -90,12 +90,12 @@ bash $HOME/microduck-jetson/deploy_microduck_jetson.sh
 如果 Jetson 上没有部署脚本，在开发电脑的仓库目录执行：
 
 ```bash
-cd /home/darklee/microduck-jetson
+cd <LOCAL_MICRODUCK_DEMO_DIR>
 
-ssh seeed@192.168.88.77 'mkdir -p ~/microduck-jetson'
+ssh <JETSON_USER>@<JETSON_HOST> 'mkdir -p ~/microduck-jetson'
 
 scp deploy_microduck_jetson.sh \
-  seeed@192.168.88.77:~/microduck-jetson/
+  <JETSON_USER>@<JETSON_HOST>:~/microduck-jetson/
 ```
 
 然后按照上一节运行脚本。
@@ -105,7 +105,7 @@ scp deploy_microduck_jetson.sh \
 如果不使用一键脚本，先登录 Jetson：
 
 ```bash
-ssh seeed@192.168.88.77
+ssh <JETSON_USER>@<JETSON_HOST>
 ```
 
 安装依赖：
@@ -361,7 +361,7 @@ uv run --no-sync train Mjlab-Velocity-Flat-MicroDuck \
 ## 1. 登录 Jetson
 
 ```bash
-ssh seeed@192.168.88.77
+ssh <JETSON_USER>@<JETSON_HOST>
 ```
 
 登录时使用 Jetson 实际配置的用户密码。
@@ -524,7 +524,7 @@ uv run --no-sync tensorboard \
 然后在同一局域网电脑的浏览器中访问：
 
 ```text
-http://192.168.88.77:6006
+http://<JETSON_HOST>:6006
 ```
 
 ## 10. 断点续训
@@ -585,7 +585,7 @@ uv run --no-sync play Mjlab-Velocity-Flat-MicroDuck \
   --viewer viser
 ```
 
-浏览器访问 `http://192.168.88.77:8080`。
+浏览器访问 `http://<JETSON_HOST>:8080`；在 Jetson 本机浏览器中可使用 `http://127.0.0.1:8080`。
 
 如果需要在 Jetson 本地打开 MuJoCo 窗口，Jetson 必须连接显示器并运行桌面环境。在 Jetson 桌面终端执行：
 
