@@ -174,6 +174,7 @@ uv run --no-sync python3 scripts/infer_policy.py \
   --roulade pretrained/pollen-robotics/roulade.onnx \
   --kick-left pretrained/pollen-robotics/ball_kick_left.onnx \
   --kick-right pretrained/pollen-robotics/ball_kick_right.onnx \
+  --one-leg-balance models/exports/one_leg_balance/one_leg_balance_model_999.onnx \
   --new-cmd-obs
 ```
 
@@ -185,6 +186,7 @@ uv run --no-sync python3 scripts/infer_policy.py \
 - `Y`：切换坐下/站起。
 - `R`：触发前滚翻。
 - `K` / `L`：左脚/右脚踢球。
+- `O`：执行一次完整的 6 秒单脚平衡动作，结束后自动切回行走或站立策略。
 - `Space`：速度指令归零。
 - `Q`：退出。
 
@@ -274,6 +276,15 @@ uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
   --agent.max_iterations 5
 ```
 
+完整训练得到的 `model_999.pt` 及其 ONNX 导出已经放入仓库：
+
+```text
+models/checkpoints/rsl_rl/one_leg_balance/2026-09-08_13-57-36_one_leg_balance_left_support/model_999.pt
+models/exports/one_leg_balance/one_leg_balance_model_999.onnx
+```
+
+键盘推理时通过 `--one-leg-balance` 加载 ONNX，然后按 `O`。脚本会向策略输入训练时相同的 6 秒余弦/正弦相位命令，完成抬脚、保持和落脚后自动切回行走或站立策略。
+
 ## 4. 详细文档
 
 - 环境部署、日常训练、TensorBoard、MuJoCo 和键盘推理：`microduck_jetson_startup.md`
@@ -285,7 +296,7 @@ uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
 `models/checkpoints/rsl_rl/velocity/`。官方项目没有提供可续训 PT，因此这里的
 PT 是本次 Jetson 行走训练结果，不是官方发布模型。
 
-单脚平衡示例目前提供任务代码和姿势编辑器，但不包含可用的完整训练 checkpoint。5 次迭代仅用于验证配置和训练链路，不能视为已训练模型。
+单脚平衡示例包含完成 1000 次迭代训练后保存的 `model_999.pt` 和对应 ONNX。文档中的 5 次迭代命令仍只用于验证配置和训练链路。
 
 Jetson 实机训练截图和 MuJoCo 推理录屏位于 `docs/media/`，包括并行训练、
 GPU 监控、前进/后退推理以及键盘触发踢球演示。

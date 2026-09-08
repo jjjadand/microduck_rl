@@ -26,3 +26,17 @@ the longest included walking run.
 
 The original TensorBoard event files, videos, generated logs, and the `.venv`
 environment are intentionally excluded from this repository.
+
+## One-leg balance
+
+The completed Jetson one-leg balance artifacts are stored in:
+
+```text
+models/checkpoints/rsl_rl/one_leg_balance/2026-09-08_13-57-36_one_leg_balance_left_support/model_999.pt
+models/exports/one_leg_balance/one_leg_balance_model_999.onnx
+```
+
+The checkpoint contains the PPO training state. The ONNX export contains the
+actor policy with its observation normalizer embedded and is loaded by
+`scripts/infer_policy.py --one-leg-balance`. Press `O` to run one six-second
+phase cycle and return to the walking or standing policy.

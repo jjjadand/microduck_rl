@@ -130,12 +130,14 @@ uv run --no-sync python3 scripts/infer_policy.py \
   --roulade pretrained/pollen-robotics/roulade.onnx \
   --kick-left pretrained/pollen-robotics/ball_kick_left.onnx \
   --kick-right pretrained/pollen-robotics/ball_kick_right.onnx \
+  --one-leg-balance models/exports/one_leg_balance/one_leg_balance_model_999.onnx \
   --new-cmd-obs
 ```
 
 Arrow keys control translation, `A`/`E` control turning, `G` triggers ground
 pick, `Y` switches sit/stand, `R` triggers roulade, `K`/`L` trigger left/right
-kick, `Space` zeros the velocity command, and `Q` exits.
+kick, `O` runs one complete six-second one-leg balance cycle, `Space` zeros the
+velocity command, and `Q` exits.
 
 Export a checkpoint with the project wrapper so the observation normalizer is
 embedded in the ONNX file:
@@ -193,6 +195,11 @@ The pose, phase timing, reward terms, and PPO configuration are defined in
 pose when the MuJoCo window closes. The five-iteration run only validates the
 training chain; it is not a trained policy.
 
+The completed Jetson run is included as `model_999.pt`, together with its ONNX
+export. Start the keyboard demo with `--one-leg-balance` and press `O`; the
+policy receives the same six-second cos/sin phase command used during training
+and automatically hands control back to walking or standing afterward.
+
 Read [`microduck_custom_action_training.md`](microduck_custom_action_training.md)
 for the full custom-task example, reward design, curriculum, Backlash variants,
 testing, and deployment guidance.
@@ -202,6 +209,8 @@ testing, and deployment guidance.
 - Official ONNX policies are under `pretrained/pollen-robotics/`.
 - Included PT files under `models/checkpoints/` are training checkpoints, not
   official Pollen Robotics releases.
+- The one-leg balance artifacts are under `models/checkpoints/rsl_rl/one_leg_balance/`
+  and `models/exports/one_leg_balance/`.
 - PT files contain training state; ONNX files are inference artifacts and do not
   contain the PPO optimizer or critic state.
 - Always use `scripts/export.py` to export a checkpoint for deployment.
