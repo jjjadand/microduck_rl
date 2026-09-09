@@ -2813,6 +2813,31 @@ def phase_site_height_track(
     return torch.exp(-((height - target) / std) ** 2)
 
 
+def phase_sagittal_foot_separation_track(
+    env: ManagerBasedRlEnv,
+    asset_cfg: SceneEntityCfg,
+    command_name: str = "twist",
+    target_separation: float = 0.095,
+    std: float = 0.025,
+    split_end: float = 0.30,
+    hold_end: float = 0.58,
+    return_end: float = 0.78,
+) -> torch.Tensor:
+    """Track signed front-to-back foot separation in the robot base frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    phase = (torch.atan2(cmd[:, 1], cmd[:, 0]) / (2 * torch.pi)) % 1.0
+    blend = phase_pose_blend(phase, split_end, hold_end, return_end)
+    target = blend * target_separation
+
+    foot_pos_w = asset.data.site_pos_w[:, asset_cfg.site_ids, :]
+    foot_rel_w = foot_pos_w - asset.data.root_link_pos_w[:, None, :]
+    root_rot_w = matrix_from_quat(asset.data.root_link_quat_w)
+    foot_rel_b = torch.matmul(root_rot_w.transpose(1, 2)[:, None, :, :], foot_rel_w[..., None]).squeeze(-1)
+    separation = foot_rel_b[:, 0, 0] - foot_rel_b[:, 1, 0]
+    return torch.exp(-((separation - target) / std) ** 2)
+
+
 def _phase_pose_error(
     env: ManagerBasedRlEnv,
     asset_cfg: SceneEntityCfg,

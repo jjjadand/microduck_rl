@@ -298,6 +298,35 @@ PT 是本次 Jetson 行走训练结果，不是官方发布模型。
 
 单脚平衡示例包含完成 1000 次迭代训练后保存的 `model_999.pt` 和对应 ONNX。文档中的 5 次迭代命令仍只用于验证配置和训练链路。
 
+### 双脚支撑的前后劈叉姿势
+
+由于持续单脚平衡对 Microduck 的重心控制要求较高，仓库新增了更容易训练的双脚支撑动作：左脚向前、右脚向后形成前后劈叉姿势，保持双脚平放并接触地面，然后恢复立正。
+
+```text
+Task ID: Mjlab-FrontBackSplit-Flat-MicroDuck
+环境配置: src/mjlab_microduck/tasks/microduck_front_back_split_env_cfg.py
+姿势编辑器: scripts/front_back_split_pose_editor.py
+```
+
+打开经过运动学验证的目标姿势：
+
+```bash
+export MUJOCO_GL=glfw
+uv run --no-sync python scripts/front_back_split_pose_editor.py
+```
+
+训练冒烟测试：
+
+```bash
+export MUJOCO_GL=egl
+uv run --no-sync train Mjlab-FrontBackSplit-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
+```
+
+目标姿势的前后足距约为 9.5 cm，两只脚的高度差小于 0.2 mm，并且没有关节达到机械限位。相比单脚独立，该动作始终保留双脚支撑，训练成功率预计更高。
+
 Jetson 实机训练截图和 MuJoCo 推理录屏位于 `docs/media/`，包括并行训练、
 GPU 监控、前进/后退推理以及键盘触发踢球演示。
 

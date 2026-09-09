@@ -204,6 +204,36 @@ Read [`microduck_custom_action_training.md`](microduck_custom_action_training.md
 for the full custom-task example, reward design, curriculum, Backlash variants,
 testing, and deployment guidance.
 
+### Front-Back Split Stance
+
+For a more stable custom-motion starting point, the repository also includes a
+double-support front-back split stance. The left foot moves forward, the right
+foot moves backward, both feet stay flat on the ground, and the robot then
+returns to its normal standing pose.
+
+```text
+Task ID:      Mjlab-FrontBackSplit-Flat-MicroDuck
+Environment:  src/mjlab_microduck/tasks/microduck_front_back_split_env_cfg.py
+Pose editor:  scripts/front_back_split_pose_editor.py
+```
+
+```bash
+# Inspect the kinematically validated target pose in MuJoCo.
+export MUJOCO_GL=glfw
+uv run --no-sync python scripts/front_back_split_pose_editor.py
+
+# Training smoke test.
+export MUJOCO_GL=egl
+uv run --no-sync train Mjlab-FrontBackSplit-Flat-MicroDuck \
+  --env.scene.num-envs 64 \
+  --agent.logger tensorboard \
+  --agent.max_iterations 5
+```
+
+The target uses approximately 9.5 cm of signed sagittal foot separation while
+keeping the two foot sites level. This double-support motion is expected to be
+easier to learn than sustained one-leg balance.
+
 ## Models
 
 - Official ONNX policies are under `pretrained/pollen-robotics/`.
