@@ -831,17 +831,17 @@ Mjlab-Bow-Flat-Backlash-MicroDuck
 
 Bow 使用普通双足全碰撞模型，因此选择 `_BL_ALLCOL`。轮滑动作应使用 `_BL_ROLLERS`，行走模型按现有 velocity 任务选择 `_BL_WALK`。
 
-## 19. 已验证示例：单脚平衡
+## 19. 已验证示例：双脚前后劈叉
 
-仓库提供了左脚支撑、右脚抬起的单脚平衡任务。任务 ID 定义在任务注册表中：
+仓库提供了左脚向前、右脚向后、保持双脚着地后恢复立正的前后劈叉任务。任务 ID 定义在任务注册表中：
 
 ```python
 # src/mjlab_microduck/tasks/__init__.py
 register_mjlab_task(
-    task_id="Mjlab-OneLegBalance-Flat-MicroDuck",
-    env_cfg=make_microduck_one_leg_balance_env_cfg(),
-    play_env_cfg=make_microduck_one_leg_balance_env_cfg(play=True),
-    rl_cfg=MicroduckOneLegBalanceRlCfg,
+    task_id="Mjlab-FrontBackSplit-Flat-MicroDuck",
+    env_cfg=make_microduck_front_back_split_env_cfg(),
+    play_env_cfg=make_microduck_front_back_split_env_cfg(play=True),
+    rl_cfg=MicroduckFrontBackSplitRlCfg,
     runner_cls=MicroduckOnPolicyRunner,
 )
 ```
@@ -849,7 +849,7 @@ register_mjlab_task(
 这个字符串是 `train`、`play` 和 `list-envs` 查询注册表时使用的键。动作姿态、阶段时间、奖励和 PPO 参数定义在：
 
 ```text
-src/mjlab_microduck/tasks/microduck_one_leg_balance_env_cfg.py
+src/mjlab_microduck/tasks/microduck_front_back_split_env_cfg.py
 ```
 
 可视化编辑目标姿态：
@@ -857,22 +857,22 @@ src/mjlab_microduck/tasks/microduck_one_leg_balance_env_cfg.py
 ```bash
 cd ~/microduck-jetson/microduck_rl
 export MUJOCO_GL=glfw
-uv run --no-sync python scripts/one_leg_pose_editor.py
+uv run --no-sync python scripts/front_back_split_pose_editor.py
 ```
 
 确认注册并运行训练冒烟测试：
 
 ```bash
-uv run --no-sync list-envs | grep OneLegBalance
+uv run --no-sync list-envs | grep FrontBackSplit
 
 export MUJOCO_GL=egl
-uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
+uv run --no-sync train Mjlab-FrontBackSplit-Flat-MicroDuck \
   --env.scene.num-envs 64 \
   --agent.logger tensorboard \
   --agent.max_iterations 5
 ```
 
-5 次迭代只验证训练链路，不会生成可直接推理的成熟策略。完整训练后应使用生成的 `.pt` checkpoint 执行 `play`，再通过 `scripts/export.py` 导出包含观测归一化器的 ONNX。
+5 次迭代只验证训练链路，不会生成可直接推理的成熟策略。仓库附带的 `model_999.pt` 已通过 `scripts/export.py` 导出为包含观测归一化器的 ONNX，可通过 `--front-back-split` 加载并按 `O` 触发。
 
 ## 20. 自定义动作检查清单
 

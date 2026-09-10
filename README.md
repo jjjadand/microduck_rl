@@ -28,7 +28,7 @@ the number of parallel environments on devices with less memory.
 - MuJoCo Native Viewer or browser-based Viser visualization.
 - Keyboard-controlled inference using the official multi-policy ONNX demo.
 - Checkpoint playback and ONNX export with the observation normalizer embedded.
-- A complete one-leg balance example that can be used as a custom-task template.
+- A completed front-back split example that can be used as a custom-task template.
 
 ## Repository Layout
 
@@ -130,13 +130,13 @@ uv run --no-sync python3 scripts/infer_policy.py \
   --roulade pretrained/pollen-robotics/roulade.onnx \
   --kick-left pretrained/pollen-robotics/ball_kick_left.onnx \
   --kick-right pretrained/pollen-robotics/ball_kick_right.onnx \
-  --one-leg-balance models/exports/one_leg_balance/one_leg_balance_model_999.onnx \
+  --front-back-split models/exports/front_back_split/front_back_split_model_999.onnx \
   --new-cmd-obs
 ```
 
 Arrow keys control translation, `A`/`E` control turning, `G` triggers ground
 pick, `Y` switches sit/stand, `R` triggers roulade, `K`/`L` trigger left/right
-kick, `O` runs one complete six-second one-leg balance cycle, `Space` zeros the
+kick, `O` runs one complete six-second front-back split cycle, `Space` zeros the
 velocity command, and `Q` exits.
 
 Export a checkpoint with the project wrapper so the observation normalizer is
@@ -163,50 +163,9 @@ an ONNX file. The usual workflow is:
 6. Increase training duration and parallelism only after the smoke test passes.
 7. Play the resulting PT checkpoint and export ONNX for inference.
 
-### One-Leg Balance Example
+### Front-Back Split Example
 
-The repository includes a left-foot-support, right-foot-lift task:
-
-```text
-Task ID:        Mjlab-OneLegBalance-Flat-MicroDuck
-Environment:    src/mjlab_microduck/tasks/microduck_one_leg_balance_env_cfg.py
-Registration:   src/mjlab_microduck/tasks/__init__.py
-Pose editor:    scripts/one_leg_pose_editor.py
-```
-
-The task ID is the key passed to the MJLab registry. It is not a file name and
-is not an argument to the environment factory:
-
-```bash
-uv run --no-sync list-envs | grep OneLegBalance
-
-export MUJOCO_GL=glfw
-uv run --no-sync python scripts/one_leg_pose_editor.py
-
-export MUJOCO_GL=egl
-uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
-  --env.scene.num-envs 64 \
-  --agent.logger tensorboard \
-  --agent.max_iterations 5
-```
-
-The pose, phase timing, reward terms, and PPO configuration are defined in
-`microduck_one_leg_balance_env_cfg.py`. The pose editor prints the final named
-pose when the MuJoCo window closes. The five-iteration run only validates the
-training chain; it is not a trained policy.
-
-The completed Jetson run is included as `model_999.pt`, together with its ONNX
-export. Start the keyboard demo with `--one-leg-balance` and press `O`; the
-policy receives the same six-second cos/sin phase command used during training
-and automatically hands control back to walking or standing afterward.
-
-Read [`microduck_custom_action_training.md`](microduck_custom_action_training.md)
-for the full custom-task example, reward design, curriculum, Backlash variants,
-testing, and deployment guidance.
-
-### Front-Back Split Stance
-
-For a more stable custom-motion starting point, the repository also includes a
+The completed custom-motion example is a
 double-support front-back split stance. The left foot moves forward, the right
 foot moves backward, both feet stay flat on the ground, and the robot then
 returns to its normal standing pose.
@@ -231,16 +190,23 @@ uv run --no-sync train Mjlab-FrontBackSplit-Flat-MicroDuck \
 ```
 
 The target uses approximately 9.5 cm of signed sagittal foot separation while
-keeping the two foot sites level. This double-support motion is expected to be
-easier to learn than sustained one-leg balance.
+keeping the two foot sites level. The completed Jetson run is included as
+`model_999.pt`, together with its ONNX export. Start the keyboard demo with
+`--front-back-split` and press `O`; the policy receives the same six-second
+cos/sin phase command used during training and automatically hands control back
+to walking or standing afterward.
+
+Read [`microduck_custom_action_training.md`](microduck_custom_action_training.md)
+for the full custom-task example, reward design, curriculum, Backlash variants,
+testing, and deployment guidance.
 
 ## Models
 
 - Official ONNX policies are under `pretrained/pollen-robotics/`.
 - Included PT files under `models/checkpoints/` are training checkpoints, not
   official Pollen Robotics releases.
-- The one-leg balance artifacts are under `models/checkpoints/rsl_rl/one_leg_balance/`
-  and `models/exports/one_leg_balance/`.
+- The front-back split artifacts are under `models/checkpoints/rsl_rl/front_back_split/`
+  and `models/exports/front_back_split/`.
 - PT files contain training state; ONNX files are inference artifacts and do not
   contain the PPO optimizer or critic state.
 - Always use `scripts/export.py` to export a checkpoint for deployment.

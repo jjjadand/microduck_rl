@@ -174,7 +174,7 @@ uv run --no-sync python3 scripts/infer_policy.py \
   --roulade pretrained/pollen-robotics/roulade.onnx \
   --kick-left pretrained/pollen-robotics/ball_kick_left.onnx \
   --kick-right pretrained/pollen-robotics/ball_kick_right.onnx \
-  --one-leg-balance models/exports/one_leg_balance/one_leg_balance_model_999.onnx \
+  --front-back-split models/exports/front_back_split/front_back_split_model_999.onnx \
   --new-cmd-obs
 ```
 
@@ -186,7 +186,7 @@ uv run --no-sync python3 scripts/infer_policy.py \
 - `Y`：切换坐下/站起。
 - `R`：触发前滚翻。
 - `K` / `L`：左脚/右脚踢球。
-- `O`：执行一次完整的 6 秒单脚平衡动作，结束后自动切回行走或站立策略。
+- `O`：执行一次完整的 6 秒前后劈叉动作，结束后自动切回行走或站立策略。
 - `Space`：速度指令归零。
 - `Q`：退出。
 
@@ -249,28 +249,28 @@ uv run --no-sync train Mjlab-Bow-Flat-MicroDuck \
 ~/microduck-jetson/microduck_custom_action_training.md
 ```
 
-仓库还包含已在 Jetson 上完成冒烟测试的单脚平衡示例：
+仓库包含已经在 Jetson 上完成 1000 轮训练的双脚支撑前后劈叉示例：
 
 ```text
-Task ID: Mjlab-OneLegBalance-Flat-MicroDuck
-环境配置: src/mjlab_microduck/tasks/microduck_one_leg_balance_env_cfg.py
+Task ID: Mjlab-FrontBackSplit-Flat-MicroDuck
+环境配置: src/mjlab_microduck/tasks/microduck_front_back_split_env_cfg.py
 任务注册: src/mjlab_microduck/tasks/__init__.py
-姿势编辑器: scripts/one_leg_pose_editor.py
+姿势编辑器: scripts/front_back_split_pose_editor.py
 ```
 
-`Mjlab-OneLegBalance-Flat-MicroDuck` 是传给 MJLab 注册表的任务 ID。`train` 命令通过该字符串查找 `register_mjlab_task()`，再加载环境配置、RL 配置和 runner；它不是文件名，也不是传给环境工厂函数的参数。
+`Mjlab-FrontBackSplit-Flat-MicroDuck` 是传给 MJLab 注册表的任务 ID。`train` 命令通过该字符串查找 `register_mjlab_task()`，再加载环境配置、RL 配置和 runner；它不是文件名，也不是传给环境工厂函数的参数。
 
 ```bash
 # 检查注册结果
-uv run --no-sync list-envs | grep OneLegBalance
+uv run --no-sync list-envs | grep FrontBackSplit
 
 # 在 Jetson 桌面打开姿势编辑器
 export MUJOCO_GL=glfw
-uv run --no-sync python scripts/one_leg_pose_editor.py
+uv run --no-sync python scripts/front_back_split_pose_editor.py
 
 # 训练链路冒烟测试
 export MUJOCO_GL=egl
-uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
+uv run --no-sync train Mjlab-FrontBackSplit-Flat-MicroDuck \
   --env.scene.num-envs 64 \
   --agent.logger tensorboard \
   --agent.max_iterations 5
@@ -279,11 +279,11 @@ uv run --no-sync train Mjlab-OneLegBalance-Flat-MicroDuck \
 完整训练得到的 `model_999.pt` 及其 ONNX 导出已经放入仓库：
 
 ```text
-models/checkpoints/rsl_rl/one_leg_balance/2026-09-08_13-57-36_one_leg_balance_left_support/model_999.pt
-models/exports/one_leg_balance/one_leg_balance_model_999.onnx
+models/checkpoints/rsl_rl/front_back_split/2026-09-09_18-04-10_front_back_split_left_forward/model_999.pt
+models/exports/front_back_split/front_back_split_model_999.onnx
 ```
 
-键盘推理时通过 `--one-leg-balance` 加载 ONNX，然后按 `O`。脚本会向策略输入训练时相同的 6 秒余弦/正弦相位命令，完成抬脚、保持和落脚后自动切回行走或站立策略。
+键盘推理时通过 `--front-back-split` 加载 ONNX，然后按 `O`。脚本会向策略输入训练时相同的 6 秒余弦/正弦相位命令，完成前后劈叉、保持并恢复立正后自动切回行走或站立策略。
 
 ## 4. 详细文档
 
@@ -296,9 +296,9 @@ models/exports/one_leg_balance/one_leg_balance_model_999.onnx
 `models/checkpoints/rsl_rl/velocity/`。官方项目没有提供可续训 PT，因此这里的
 PT 是本次 Jetson 行走训练结果，不是官方发布模型。
 
-单脚平衡示例包含完成 1000 次迭代训练后保存的 `model_999.pt` 和对应 ONNX。文档中的 5 次迭代命令仍只用于验证配置和训练链路。
+前后劈叉示例包含完成 1000 次迭代训练后保存的 `model_999.pt` 和对应 ONNX。文档中的 5 次迭代命令仍只用于验证配置和训练链路。
 
-### 双脚支撑的前后劈叉姿势
+### 双脚支撑的前后劈叉姿势设计
 
 由于持续单脚平衡对 Microduck 的重心控制要求较高，仓库新增了更容易训练的双脚支撑动作：左脚向前、右脚向后形成前后劈叉姿势，保持双脚平放并接触地面，然后恢复立正。
 

@@ -138,9 +138,9 @@ class PolicyInference:
                  sitstand_onnx_path=None,
                  kick_left_onnx_path=None, kick_right_onnx_path=None,
                  roulade_onnx_path=None,
-                 one_leg_balance_onnx_path=None,
+                 front_back_split_onnx_path=None,
                  kick_duration=3.0, roulade_duration=2.0,
-                 one_leg_balance_period=6.0):
+                 front_back_split_period=6.0):
         self.model = model
         self.data = data
         self.action_scale = action_scale
@@ -234,7 +234,7 @@ class PolicyInference:
             print(f"Slope policy input shape: {sl_input_shape}")
 
         # Episodic behavior policies use the unified 61D observation layout.
-        # Kick/roulade use an all-zero command; one-leg balance receives a
+        # Kick/roulade use an all-zero command; front-back split receives a
         # cos/sin phase command for one complete cycle before control returns.
         self.behavior_sessions = {}
         self.behavior_durations = {}
@@ -246,8 +246,8 @@ class PolicyInference:
             ("kick_left", kick_left_onnx_path, kick_duration, None),
             ("kick_right", kick_right_onnx_path, kick_duration, None),
             ("roulade", roulade_onnx_path, roulade_duration, None),
-            ("one_leg_balance", one_leg_balance_onnx_path,
-             one_leg_balance_period, one_leg_balance_period),
+            ("front_back_split", front_back_split_onnx_path,
+             front_back_split_period, front_back_split_period),
         ):
             if not path:
                 continue
@@ -655,11 +655,11 @@ class PolicyInference:
         self.command[2] = 0.0
 
     def trigger_behavior(self, name):
-        """Start an episodic behavior (kick_left / kick_right / roulade).
+        """Start an episodic kick, roll, or phase-conditioned pose behavior.
 
-        The behavior policies were trained to run from a standing start with an
-        all-zero command and end standing, so triggering is a session swap; a
-        timer hands control back to walking/standing afterwards.
+        The policy starts from standing and ends standing. Kick and roulade use
+        a zero command, while phase-conditioned poses receive cos/sin phase.
+        A timer hands control back to walking or standing afterwards.
         """
         session = self.behavior_sessions.get(name)
         if session is None:
@@ -824,10 +824,10 @@ def main():
     parser.add_argument("--kick-left", type=str, default=None, help="Path to LEFT-foot ball kick policy ONNX (press K to trigger). Requires --new-cmd-obs. Loads a scene with a ball.")
     parser.add_argument("--kick-right", type=str, default=None, help="Path to RIGHT-foot ball kick policy ONNX (press L to trigger). Requires --new-cmd-obs. Loads a scene with a ball.")
     parser.add_argument("--roulade", type=str, default=None, help="Path to roulade (forward roll) policy ONNX (press R to trigger). Requires --new-cmd-obs.")
-    parser.add_argument("--one-leg-balance", type=str, default=None, help="Path to one-leg balance policy ONNX (press O to trigger). Requires --new-cmd-obs.")
+    parser.add_argument("--front-back-split", type=str, default=None, help="Path to front-back split policy ONNX (press O to trigger). Requires --new-cmd-obs.")
     parser.add_argument("--kick-duration", type=float, default=3.0, help="Seconds a kick policy stays active before handing back to standing/walking (default: 3.0)")
     parser.add_argument("--roulade-duration", type=float, default=2.0, help="Seconds the roulade policy stays active before handing back to standing/walking (default: 2.0, ~the roll itself; the standing/walking policy takes over for the settle)")
-    parser.add_argument("--one-leg-balance-period", type=float, default=6.0, help="One-leg balance phase period and auto-return duration in seconds (default: 6.0)")
+    parser.add_argument("--front-back-split-period", type=float, default=6.0, help="Front-back split phase period and auto-return duration in seconds (default: 6.0)")
     parser.add_argument("--lin-vel-x", type=float, default=0.0, help="Initial linear velocity X command (m/s)")
     parser.add_argument("--lin-vel-y", type=float, default=0.0, help="Initial linear velocity Y command (m/s)")
     parser.add_argument("--ang-vel-z", type=float, default=0.0, help="Initial angular velocity Z command (rad/s)")
@@ -861,10 +861,10 @@ def main():
         parser.error("At least one of --walking, --standing or --sitstand must be provided")
     if args.sitstand and not args.new_cmd_obs:
         parser.error("--sitstand policies use the unified 13D command obs (61D); add --new-cmd-obs")
-    if (args.kick_left or args.kick_right or args.roulade or args.one_leg_balance) and not args.new_cmd_obs:
-        parser.error("--kick-left/--kick-right/--roulade/--one-leg-balance policies use the unified 13D command obs (61D); add --new-cmd-obs")
-    if (args.kick_left or args.kick_right or args.roulade or args.one_leg_balance) and args.roller:
-        parser.error("kick/roulade/one-leg-balance policies are trained on the walking robot, not the roller model")
+    if (args.kick_left or args.kick_right or args.roulade or args.front_back_split) and not args.new_cmd_obs:
+        parser.error("--kick-left/--kick-right/--roulade/--front-back-split policies use the unified 13D command obs (61D); add --new-cmd-obs")
+    if (args.kick_left or args.kick_right or args.roulade or args.front_back_split) and args.roller:
+        parser.error("kick/roulade/front-back-split policies are trained on the walking robot, not the roller model")
 
     # Parse delay arguments
     delay_min_lag = 0
@@ -949,10 +949,10 @@ def main():
         kick_left_onnx_path=args.kick_left,
         kick_right_onnx_path=args.kick_right,
         roulade_onnx_path=args.roulade,
-        one_leg_balance_onnx_path=args.one_leg_balance,
+        front_back_split_onnx_path=args.front_back_split,
         kick_duration=args.kick_duration,
         roulade_duration=args.roulade_duration,
-        one_leg_balance_period=args.one_leg_balance_period,
+        front_back_split_period=args.front_back_split_period,
     )
     policy.set_vel_cmd(args.lin_vel_x, args.lin_vel_y, args.ang_vel_z)
 
@@ -1031,7 +1031,7 @@ def main():
     if policy.slope_session:
         print(f"Slope policy: loaded  (press Y to toggle, passive descent)")
     _behavior_keys = {"kick_left": "K", "kick_right": "L", "roulade": "R",
-                      "one_leg_balance": "O"}
+                      "front_back_split": "O"}
     for _name in policy.behavior_sessions:
         print(f"{_name} policy: loaded  (press {_behavior_keys[_name]}, "
               f"auto-return after {policy.behavior_durations[_name]:.1f}s)")
@@ -1152,7 +1152,7 @@ def main():
             elif key == "r":
                 policy.trigger_behavior("roulade")
             elif key == "o":
-                policy.trigger_behavior("one_leg_balance")
+                policy.trigger_behavior("front_back_split")
             elif key == "q":
                 quit_requested = True
                 print("Quit requested")
@@ -1220,7 +1220,7 @@ def main():
     print("  K:                kick with LEFT foot (requires --kick-left)")
     print("  L:                kick with RIGHT foot (requires --kick-right)")
     print("  R:                roulade / forward roll (requires --roulade)")
-    print("  O:                one-leg balance (requires --one-leg-balance)")
+    print("  O:                front-back split (requires --front-back-split)")
     print(f"  P:                random push (trunk vel = {PUSH_MAX:.1f} m/s in random direction)")
     print("  Q:                quit")
     print("  [ Body pose mode — press B to toggle ]")
